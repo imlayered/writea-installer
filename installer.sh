@@ -34,15 +34,35 @@ run_command sudo apt update && sudo apt upgrade -y
 install_nginx() {
     run_command sudo apt install -y nginx
     sudo tee /etc/nginx/sites-available/writea <<EOL
+server_tokens off;
+
 server {
     listen 80;
+	listen [::]:80;
     server_name $domain;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+	listen [::]:443 ssl http2;
+    server_name $domain;
+
+    access_log /var/log/nginx/writea.app-access.log;
+    error_log  /var/log/nginx/writea.app-error.log error;
 
     root /var/www/writea;
     index index.html index.htm;
 
+    ssl_certificate /etc/letsencrypt/live/$domain/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$domain/privkey.pem;
+	ssl_session_cache shared:SSL:10m;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
+    ssl_prefer_server_ciphers on;
+
     location / {
-        try_files \$uri \$uri/ =404;
+        try_files $uri $uri/ =404;
     }
 }
 EOL
@@ -53,22 +73,49 @@ EOL
 install_apache() {
     run_command sudo apt install -y apache2
     sudo tee /etc/apache2/sites-available/writea.conf <<EOL
+ServerTokens Prod
+
 <VirtualHost *:80>
-    ServerAdmin $email
     ServerName $domain
+
+    Redirect permanent / https://$domain/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName $domain
+
     DocumentRoot /var/www/writea
+    DirectoryIndex index.html index.htm
+
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/$domain/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/$domain/privkey.pem
+
+    SSLProtocol TLSv1.2 TLSv1.3
+    SSLCipherSuite ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
+    SSLHonorCipherOrder on
+    SSLSessionCache shmcb:/var/run/ssl_scache(512000)
+
+    CustomLog /var/log/apache2/writea.app-access.log combined
+    ErrorLog /var/log/apache2/writea.app-error.log
 
     <Directory /var/www/writea>
-        Options Indexes FollowSymLinks
+        Options -Indexes +FollowSymLinks
         AllowOverride All
         Require all granted
     </Directory>
 
-    ErrorLog \${APACHE_LOG_DIR}/error.log
-    CustomLog \${APACHE_LOG_DIR}/access.log combined
+    <Location />
+        RewriteEngine On
+        RewriteCond %{REQUEST_FILENAME} !-f
+        RewriteCond %{REQUEST_FILENAME} !-d
+        RewriteRule ^(.*)$ /index.html [L]
+    </Location>
 </VirtualHost>
 EOL
     run_command sudo a2ensite writea.conf
+    run_command sudo a2enmod rewrite
+    run_command sudo a2enmod ssl
     run_command sudo systemctl restart apache2
 }
 
