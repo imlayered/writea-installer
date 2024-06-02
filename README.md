@@ -13,10 +13,10 @@ I have only tested the installer on Ubuntu 22 & Ubuntu 24 but it will most likel
 # How to get started
 ### Simply run the script command:
 Using curl:
-```curl -O https://writea-installer.auri.lol/installer.sh && chmod +x installer.sh && ./installer.sh```
+```curl -O https://installers.auri.lol/writea.sh && chmod +x writea.sh && ./writea.sh```
 
 Using wget
-```wget https://writea-installer.auri.lol/installer.sh && chmod +x installer.sh && ./installer.sh```
+```wget https://installers.auri.lol/writea.sh && chmod +x writea.sh && ./writea.sh```
 
 **Do not run both, run whichever one you like better; I suggest using curl (the first one)**
 
