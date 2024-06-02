@@ -48,6 +48,28 @@ server {
 EOL
     run_command sudo ln -s /etc/nginx/sites-available/writea /etc/nginx/sites-enabled/
     run_command sudo systemctl restart nginx
+
+    run_command sudo apt install -y certbot python3-certbot-nginx
+    run_command sudo certbot --nginx -m $email -d $domain --agree-tos --non-interactive
+
+    sudo tee /etc/nginx/sites-available/writea_ssl <<EOL
+server {
+    listen 443 ssl;
+    server_name $domain;
+
+    root /var/www/writea;
+    index index.html index.htm;
+
+    ssl_certificate /etc/letsencrypt/live/$domain/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$domain/privkey.pem;
+
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+}
+EOL
+    run_command sudo ln -s /etc/nginx/sites-available/writea_ssl /etc/nginx/sites-enabled/
+    run_command sudo systemctl reload nginx
 }
 
 install_apache() {
@@ -70,13 +92,34 @@ install_apache() {
 EOL
     run_command sudo a2ensite writea.conf
     run_command sudo systemctl restart apache2
-}
 
-if [ "$webserver" == "nginx" ]; then
-    install_nginx
-else
-    install_apache
-fi
+    run_command sudo apt install -y certbot python3-certbot-apache
+    run_command sudo certbot --apache -m $email -d $domain --agree-tos --non-interactive
+
+    sudo tee /etc/apache2/sites-available/writea_ssl.conf <<EOL
+<VirtualHost *:443>
+    ServerAdmin $email
+    ServerName $domain
+    DocumentRoot /var/www/writea
+
+    <Directory /var/www/writea>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/$domain/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/$domain/privkey.pem
+
+    ErrorLog \${APACHE_LOG_DIR}/error.log
+    CustomLog \${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+EOL
+    run_command sudo a2ensite writea_ssl.conf
+    run_command sudo a2enmod ssl
+    run_command sudo systemctl reload apache2
+}
 
 run_command sudo mkdir -p /var/www/writea
 run_command sudo git clone https://github.com/prplwtf/writea.git /var/www/writea
@@ -84,17 +127,15 @@ run_command sudo git clone https://github.com/prplwtf/writea.git /var/www/writea
 run_command sudo cp /var/www/writea/configuration/Configuration.example.yml /var/www/writea/configuration/Configuration.yml
 sudo sed -i "s/Title:.*/Title: $site_name/" /var/www/writea/configuration/Configuration.yml
 sudo sed -i "s/Description:.*/Description: $site_description/" /var/www/writea/configuration/Configuration.yml
-sudo sed -i "s|Link:.*|Link: http://$domain|" /var/www/writea/configuration/Configuration.yml
+sudo sed -i "s|Link:.*|Link: https://$domain|" /var/www/writea/configuration/Configuration.yml
 
 if [ "$webserver" == "nginx" ]; then
-    run_command sudo apt install -y certbot python3-certbot-nginx
-    run_command sudo certbot --nginx -m $email -d $domain --agree-tos --non-interactive
+    install_nginx
 else
-    run_command sudo apt install -y certbot python3-certbot-apache
-    run_command sudo certbot --apache -m $email -d $domain --agree-tos --non-interactive
+    install_apache
 fi
 
-echo "Writea has been installed and is running on http://$domain"
+echo "Writea has been installed and is running on https://$domain"
 echo "Writea install script by Auri (auri.lol / github.com/imlayered/writea-install)"
 echo "If you find any errors, please contact me on Discord at @layered"
 echo -e " 
