@@ -1,6 +1,6 @@
 
 # Writea 🍵 Installer 
-Install script for Writea (writea.prpl.wf) for Linux servers
+Install script for Writea (writea.prpl.wtf) for Linux servers
 
 ## What is Writea?
 Writea is a fast and comfy open-source alternative for blogs. Write posts with Markdown, configure your blog with YAML, theme your page with CSS and much more! 
